@@ -1,5 +1,6 @@
 require('console.table')
 const sites = require('./sites.json')
+const versionUtils = require('./versionUtils')
 const exec = require('child_process').exec
 
 function formatSize(size) {
@@ -13,13 +14,29 @@ async function measureDocumentSizeOverTheWire(url) {
     return parseInt(result, 10)
 }
 
+async function getUrlParams() {
+    if (process.argv[2] === '-l' || process.argv[2] === '--latest') {
+        return `?ReactSource=${await versionUtils.getRecentVersion()}`
+    }
+    if (process.argv[2] === '-R' || process.argv[2] === '--ReactSource') {
+        return `?ReactSource=${process.argv[3]}`
+    }
+    return ''
+}
+
 (async () => {
-    const measureResults = await Promise.all(sites.map(async siteParams =>
-        Object.assign({}, siteParams, {size: await measureDocumentSizeOverTheWire(siteParams.url)})))
+    const measureResults = await Promise.all(sites.map(async siteParams => {
+        const urlParams = await getUrlParams()
+        const url = `${siteParams.url}${urlParams}`
+        return Object.assign({}, siteParams, {
+            url,
+            size: await measureDocumentSizeOverTheWire(url)
+        })
+    }))
 
     const formattedResults = measureResults
         .sort((a, b) => a.siteName.localeCompare(b.siteName))
-        .map(({siteName, size}) => [siteName, formatSize(size)])
+        .map(({siteName, size, url}) => [siteName, formatSize(size), url])
 
-    console.table(['Site', 'Html size (gzipped)'], formattedResults)
+    console.table(['Site', 'Html size (gzipped)', 'url'], formattedResults)
 })();
