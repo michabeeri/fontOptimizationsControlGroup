@@ -4,6 +4,7 @@ const versionUtils = require('./versionUtils')
 const  fs = require('fs-extra');
 const exec = require('child_process').exec
 const {ungzip} = require('node-gzip');
+const dateTime = require('node-datetime');
 
 function formatSize(size) {
     var i = Math.floor( Math.log(size) / Math.log(1024) )
@@ -11,7 +12,7 @@ function formatSize(size) {
 }
 
 async function downloadAndAnalizeHtml(siteName, url) {
-    const fileName = `htmlFiles/${siteName}.html`
+    const fileName = `htmlFiles/${siteName}`
     const command = `curl -H "Accept-Encoding: gzip, deflate, br" -s -o "${fileName}" ${url}`
     await new Promise((resolve, reject) => exec(command, (error, stdout, stderr) => error ? reject(error) : resolve()))
 
@@ -25,14 +26,34 @@ async function downloadAndAnalizeHtml(siteName, url) {
     }
 }
 
+function getArgs() {
+    const args = {}
+    if (process.argv.includes('-latest')) {
+        args.latest = true
+    }
+    if (process.argv.includes('-rc')) {
+        args.rc = process.argv[process.argv.indexOf('-rc') + 1]
+    }
+    if (process.argv.includes('-log')) {
+        args.log = process.argv[process.argv.indexOf('-log') + 1]
+    }
+    return args
+}
+
 async function getUrlParams() {
-    if (process.argv[2] === '-l' || process.argv[2] === '--latest') {
+    const args = getArgs()
+    if (args.latest) {
         return `?ReactSource=${await versionUtils.getRecentVersion()}`
     }
-    if (process.argv[2] === '-R' || process.argv[2] === '--ReactSource') {
-        return `?ReactSource=${process.argv[3]}`
+    if (args.rc) {
+        return `?ReactSource=${args.rc}`
     }
     return ''
+}
+
+function getCurrentDate() {
+    var dt = dateTime.create()
+    return dt.format('Y-m-d H:M:S')
 }
 
 (async () => {
@@ -48,6 +69,14 @@ async function getUrlParams() {
         .map(({siteName, size, actualSize, isClientRendered, url}) => isClientRendered ?
             [siteName, '-', '-', 'SSR Fail', url] :
             [siteName, formatSize(size), formatSize(actualSize), '\u2713', url])
+
+    const args = getArgs()
+    if (args.log) {
+        const rc = args.rc || (!args.latest && 'prod') || await versionUtils.getRecentVersion()
+        const date = getCurrentDate()
+        const data = formattedResults.map(res => res.slice(0, 4).concat([rc, date]).join(',')).join('\n')
+        await fs.appendFile(args.log, `\n${data}`)
+    }
 
     console.table(['Site', 'Compressed size', 'Actual size', 'SSR status', 'url'], formattedResults)
 })();

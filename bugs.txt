@@ -1,0 +1,5 @@
+*   Excel can't display the check-mark character, use different format for logging
+*   No reason to call getRecentVersion twice
+*   Better parsing of program arguments (probably a library for that)
+*   Move argument parsing, url building, date and size formatting to a different file
+*   Get correct RC for production
